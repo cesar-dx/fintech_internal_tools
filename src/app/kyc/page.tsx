@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ActorBar } from "@/app/kyc/ActorBar";
+import { ActorBar } from "@/app/ActorBar";
 import { listOpenCases } from "@/lib/kyc";
 import { getActor, listActors } from "@/lib/session";
 

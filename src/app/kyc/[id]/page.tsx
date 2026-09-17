@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { submitDecision } from "@/app/kyc/actions";
-import { ActorBar } from "@/app/kyc/ActorBar";
+import { ActorBar } from "@/app/ActorBar";
 import { auditTrailFor } from "@/lib/audit";
 import { getCase, KYC_ENTITY, OPEN_STATUSES } from "@/lib/kyc";
 import { can } from "@/lib/permissions";

@@ -4,15 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { CaseClosedError, decideCase, isKycDecision } from "@/lib/kyc";
 import { ActorError, PermissionError, ReasonRequiredError } from "@/lib/mutate";
-import { ACTOR_COOKIE, getActor } from "@/lib/session";
-import { cookies } from "next/headers";
-
-export async function switchActor(formData: FormData) {
-  const actorId = String(formData.get("actorId") ?? "");
-  const jar = await cookies();
-  jar.set(ACTOR_COOKIE, actorId, { httpOnly: true, sameSite: "lax", path: "/" });
-  revalidatePath("/kyc");
-}
+import { getActor } from "@/lib/session";
 
 export async function submitDecision(formData: FormData) {
   const caseId = String(formData.get("caseId") ?? "");

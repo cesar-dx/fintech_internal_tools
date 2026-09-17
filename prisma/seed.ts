@@ -86,6 +86,70 @@ const SEED_CASES = [
   },
 ];
 
+/** Stand-in for the processor feed: payments arrive already settled. */
+const SEED_TRANSACTIONS = [
+  {
+    reference: "TXN-2041",
+    customerName: "Nadia Haddad",
+    customerEmail: "nadia.haddad@example.com",
+    cardLast4: "4417",
+    merchant: "Northwind Supplies",
+    description: "Annual subscription — Pro plan",
+    amountCents: 24_900,
+    occurredAt: new Date("2026-09-02T10:14:00Z"),
+  },
+  {
+    reference: "TXN-2042",
+    customerName: "Tobias Lindqvist",
+    customerEmail: "tobias.lindqvist@example.com",
+    cardLast4: "8845",
+    merchant: "Northwind Supplies",
+    description: "Hardware bundle, order 55120",
+    amountCents: 132_500,
+    occurredAt: new Date("2026-09-04T16:02:00Z"),
+  },
+  {
+    reference: "TXN-2043",
+    customerName: "Grace Abiola",
+    customerEmail: "grace.abiola@example.com",
+    cardLast4: "3311",
+    merchant: "Lagos Logistics",
+    description: "Freight charge, shipment 8871",
+    amountCents: 50_000,
+    occurredAt: new Date("2026-09-06T08:41:00Z"),
+  },
+  {
+    reference: "TXN-2044",
+    customerName: "Marcus Feld",
+    customerEmail: "marcus.feld@example.com",
+    cardLast4: "7782",
+    merchant: "Berlin Workshop",
+    description: "Repair service, invoice R-2291",
+    amountCents: 78_400,
+    occurredAt: new Date("2026-09-08T12:25:00Z"),
+  },
+  {
+    reference: "TXN-2045",
+    customerName: "Ana Beltrán",
+    customerEmail: "ana.beltran@example.com",
+    cardLast4: "6620",
+    merchant: "Madrid Books",
+    description: "Course materials",
+    amountCents: 8_750,
+    occurredAt: new Date("2026-09-10T09:03:00Z"),
+  },
+  {
+    reference: "TXN-2046",
+    customerName: "Nadia Haddad",
+    customerEmail: "nadia.haddad@example.com",
+    cardLast4: "4417",
+    merchant: "Northwind Supplies",
+    description: "Seat upgrade, 5 users",
+    amountCents: 61_000,
+    occurredAt: new Date("2026-09-13T14:47:00Z"),
+  },
+];
+
 async function createUser(
   tx: Prisma.TransactionClient,
   user: { email: string; name: string; role: Role },
@@ -139,9 +203,20 @@ async function main() {
     });
   }
 
+  // Payments also come from an external feed, so they are inserted directly;
+  // every refund against them goes through mutate().
+  for (const transaction of SEED_TRANSACTIONS) {
+    await prisma.transaction.upsert({
+      where: { reference: transaction.reference },
+      update: {},
+      create: transaction,
+    });
+  }
+
   const counts = await prisma.user.groupBy({ by: ["role"], _count: true });
   console.log("Seeded users:", counts);
   console.log("Seeded KYC cases:", await prisma.kycCase.count());
+  console.log("Seeded transactions:", await prisma.transaction.count());
   console.log("Audit entries:", await prisma.auditLogEntry.count());
 }
 

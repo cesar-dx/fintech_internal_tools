@@ -13,6 +13,10 @@ export const ACTION_PERMISSIONS = {
   "kyc.escalate": ["ANALYST", "REVIEWER", "ADMIN"],
   "kyc.approve": ["REVIEWER", "ADMIN"],
   "kyc.reject": ["REVIEWER", "ADMIN"],
+  "refund.issue": ["ANALYST", "REVIEWER", "ADMIN"],
+  "refund.request": ["ANALYST", "REVIEWER", "ADMIN"],
+  "refund.approve": ["REVIEWER", "ADMIN"],
+  "refund.reject": ["REVIEWER", "ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type AuditAction = keyof typeof ACTION_PERMISSIONS;
