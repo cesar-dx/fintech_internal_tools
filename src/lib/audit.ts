@@ -1,10 +1,9 @@
-import { Role } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { redactName } from "@/lib/redact";
 
 export type AuditEntryView = {
   id: string;
   actor: string;
+  actorRole: string;
   action: string;
   entityType: string;
   entityId: string;
@@ -12,11 +11,13 @@ export type AuditEntryView = {
   createdAt: Date;
 };
 
-/** Audit trail for one record, newest first, with actor PII redacted at fetch. */
+/**
+ * Audit trail for one record, newest first. The actor is internal staff, so
+ * their identity is part of the evidence and is never redacted.
+ */
 export async function auditTrailFor(
   entityType: string,
   entityId: string,
-  viewerRole: Role,
   limit = 50,
 ): Promise<AuditEntryView[]> {
   const entries = await prisma.auditLogEntry.findMany({
@@ -28,7 +29,8 @@ export async function auditTrailFor(
 
   return entries.map((entry) => ({
     id: entry.id,
-    actor: redactName(entry.actor.name, viewerRole),
+    actor: entry.actor.name,
+    actorRole: entry.actor.role,
     action: entry.action,
     entityType: entry.entityType,
     entityId: entry.entityId,

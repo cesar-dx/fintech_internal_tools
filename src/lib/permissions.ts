@@ -10,10 +10,9 @@ export const ACTION_PERMISSIONS = {
   "user.change_role": ["ADMIN"],
   "user.deactivate": ["ADMIN"],
   "user.reactivate": ["ADMIN"],
-  "record.annotate": ["ANALYST", "REVIEWER", "ADMIN"],
-  "record.escalate": ["ANALYST", "REVIEWER", "ADMIN"],
-  "record.approve": ["REVIEWER", "ADMIN"],
-  "record.reject": ["REVIEWER", "ADMIN"],
+  "kyc.escalate": ["ANALYST", "REVIEWER", "ADMIN"],
+  "kyc.approve": ["REVIEWER", "ADMIN"],
+  "kyc.reject": ["REVIEWER", "ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type AuditAction = keyof typeof ACTION_PERMISSIONS;
