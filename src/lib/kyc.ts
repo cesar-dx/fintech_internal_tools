@@ -1,4 +1,9 @@
-import { KycStatus, RiskFlag, Role } from "@prisma/client";
+import {
+  KycRejectionCategory,
+  KycStatus,
+  RiskFlag,
+  Role,
+} from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { mutate } from "@/lib/mutate";
 import { AuditAction } from "@/lib/permissions";
@@ -23,6 +28,20 @@ export type KycQueueItem = {
   status: KycStatus;
 };
 
+/** Rejection categories, in the order they are offered to a reviewer. */
+export const REJECTION_CATEGORIES: Record<KycRejectionCategory, string> = {
+  DOCUMENT_QUALITY: "Document quality",
+  SANCTIONS_MATCH: "Sanctions match",
+  DUPLICATE_APPLICANT: "Duplicate applicant",
+  OTHER: "Other",
+};
+
+export function isRejectionCategory(
+  value: string,
+): value is KycRejectionCategory {
+  return value in REJECTION_CATEGORIES;
+}
+
 export type KycCaseDetail = KycQueueItem & {
   applicantEmail: string;
   dateOfBirth: string;
@@ -31,6 +50,7 @@ export type KycCaseDetail = KycQueueItem & {
   address: string;
   occupation: string;
   riskNotes: string;
+  rejectionCategory: KycRejectionCategory | null;
   decidedAt: Date | null;
   decidedBy: string | null;
 };
@@ -79,12 +99,14 @@ export async function getCase(
     address: redactAddress(kycCase.address, viewerRole),
     occupation: kycCase.occupation,
     riskNotes: kycCase.riskNotes,
+    rejectionCategory: kycCase.rejectionCategory,
     decidedAt: kycCase.decidedAt,
     decidedBy: kycCase.decidedBy?.name ?? null,
   };
 }
 
 export class CaseClosedError extends Error {}
+export class RejectionCategoryRequiredError extends Error {}
 
 const DECISIONS = {
   approve: { action: "kyc.approve", status: "APPROVED" },
@@ -107,9 +129,18 @@ export async function decideCase(params: {
   caseId: string;
   decision: KycDecision;
   reason: string;
+  rejectionCategory?: KycRejectionCategory | null;
 }) {
   const { action, status } = DECISIONS[params.decision];
   const isFinal = status === "APPROVED" || status === "REJECTED";
+
+  const rejectionCategory =
+    params.decision === "reject" ? (params.rejectionCategory ?? null) : null;
+  if (params.decision === "reject" && rejectionCategory === null) {
+    throw new RejectionCategoryRequiredError(
+      "Select a rejection category to reject a case",
+    );
+  }
 
   return mutate({
     actorId: params.actorId,
@@ -117,7 +148,7 @@ export async function decideCase(params: {
     entityType: KYC_ENTITY,
     entityId: params.caseId,
     reason: params.reason,
-    metadata: { status },
+    metadata: rejectionCategory ? { status, rejectionCategory } : { status },
     apply: async (tx) => {
       const current = await tx.kycCase.findUnique({
         where: { id: params.caseId },
@@ -140,6 +171,7 @@ export async function decideCase(params: {
         where: { id: params.caseId },
         data: {
           status,
+          rejectionCategory,
           decidedAt: isFinal ? new Date() : null,
           decidedById: isFinal ? params.actorId : null,
         },
