@@ -1,5 +1,5 @@
 import { User } from "@prisma/client";
-import { switchActor } from "@/app/kyc/actions";
+import { switchActor } from "@/app/actions";
 
 export function ActorBar({
   actor,

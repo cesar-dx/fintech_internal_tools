@@ -147,6 +147,51 @@ select {
   cursor: pointer;
 }
 
+.tools {
+  margin: 1rem 0 0 1.25rem;
+  font-size: 0.95rem;
+}
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  max-width: 34rem;
+  font-size: 0.9rem;
+}
+
+.search-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.search input {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.decision input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.approval {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.approval h2 {
+  margin-top: 0;
+}
+
 .alert {
   padding: 0.6rem 0.9rem;
   border-radius: 4px;
