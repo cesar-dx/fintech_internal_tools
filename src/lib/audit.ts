@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 export type AuditEntryView = {
@@ -9,6 +10,7 @@ export type AuditEntryView = {
   entityId: string;
   reason: string;
   createdAt: Date;
+  metadata: Prisma.JsonValue;
 };
 
 /** Audit trail covering several records of one type, newest first. */
@@ -56,6 +58,7 @@ function toView(entry: {
   entityId: string;
   reason: string;
   createdAt: Date;
+  metadata: Prisma.JsonValue;
 }): AuditEntryView {
   return {
     id: entry.id,
@@ -66,5 +69,6 @@ function toView(entry: {
     entityId: entry.entityId,
     reason: entry.reason,
     createdAt: entry.createdAt,
+    metadata: entry.metadata,
   };
 }

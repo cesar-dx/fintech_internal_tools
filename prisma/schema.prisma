@@ -37,6 +37,13 @@ enum KycStatus {
   REJECTED
 }
 
+enum KycRejectionCategory {
+  DOCUMENT_QUALITY
+  SANCTIONS_MATCH
+  DUPLICATE_APPLICANT
+  OTHER
+}
+
 enum RiskFlag {
   LOW
   MEDIUM
@@ -44,24 +51,26 @@ enum RiskFlag {
 }
 
 model KycCase {
-  id             String    @id @default(cuid())
-  reference      String    @unique
-  applicantName  String
-  applicantEmail String
-  dateOfBirth    DateTime
-  nationalId     String
-  country        String
-  address        String
-  occupation     String
-  submittedAt    DateTime
-  riskFlag       RiskFlag
-  riskNotes      String
-  status         KycStatus @default(PENDING)
-  decidedAt      DateTime?
-  decidedById    String?
-  decidedBy      User?     @relation("KycDecidedBy", fields: [decidedById], references: [id])
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                String                @id @default(cuid())
+  reference         String                @unique
+  applicantName     String
+  applicantEmail    String
+  dateOfBirth       DateTime
+  nationalId        String
+  country           String
+  address           String
+  occupation        String
+  submittedAt       DateTime
+  riskFlag          RiskFlag
+  riskNotes         String
+  status            KycStatus             @default(PENDING)
+  /// Set only on rejection: the compliance category the rejection falls under.
+  rejectionCategory KycRejectionCategory?
+  decidedAt         DateTime?
+  decidedById       String?
+  decidedBy         User?                 @relation("KycDecidedBy", fields: [decidedById], references: [id])
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
 
   @@index([status, submittedAt])
 }
