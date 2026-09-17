@@ -23,8 +23,45 @@ model User {
   updatedAt DateTime  @updatedAt
 
   auditEntries AuditLogEntry[] @relation("AuditActor")
+  kycDecisions KycCase[]       @relation("KycDecidedBy")
 
   @@index([role])
+}
+
+enum KycStatus {
+  PENDING
+  ESCALATED
+  APPROVED
+  REJECTED
+}
+
+enum RiskFlag {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model KycCase {
+  id             String    @id @default(cuid())
+  reference      String    @unique
+  applicantName  String
+  applicantEmail String
+  dateOfBirth    DateTime
+  nationalId     String
+  country        String
+  address        String
+  occupation     String
+  submittedAt    DateTime
+  riskFlag       RiskFlag
+  riskNotes      String
+  status         KycStatus @default(PENDING)
+  decidedAt      DateTime?
+  decidedById    String?
+  decidedBy      User?     @relation("KycDecidedBy", fields: [decidedById], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, submittedAt])
 }
 
 /// Append-only record of every state change. Written by `mutate()` only,

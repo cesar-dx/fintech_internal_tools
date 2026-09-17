@@ -1,7 +1,7 @@
 # fintech_internal_tools
 
-Shared foundation for the internal operations tools: Next.js (App Router) + TypeScript,
-Prisma and Postgres. No feature app is mounted yet.
+Internal operations tools: Next.js (App Router) + TypeScript, Prisma and Postgres.
+First app is the KYC review queue at `/kyc`.
 
 See [conventions.md](./conventions.md) for the rules every app here follows.
 
@@ -11,7 +11,7 @@ See [conventions.md](./conventions.md) for the rules every app here follows.
 npm install
 cp .env.example .env   # point DATABASE_URL at a local Postgres
 npm run db:migrate     # create the schema
-npm run db:seed        # users across the three roles
+npm run db:seed        # staff across the three roles, plus mock KYC cases
 npm run dev
 ```
 
@@ -20,11 +20,14 @@ npm run dev
 | Path | Purpose |
 | --- | --- |
 | `prisma/schema.prisma` | `User` (ANALYST / REVIEWER / ADMIN) and the append-only `AuditLogEntry` |
-| `prisma/seed.ts` | Bootstrap admin plus analysts, reviewers and a second admin |
+| `prisma/seed.ts` | Staff across the three roles, plus five mock KYC cases |
 | `src/lib/mutate.ts` | The only supported way to change state |
 | `src/lib/permissions.ts` | Action → allowed roles registry; the source of audit action names |
 | `src/lib/redact.ts` | PII redaction applied where data is fetched |
-| `src/lib/users.ts`, `src/lib/audit.ts` | Example read/write layer built on the above |
+| `src/lib/users.ts`, `src/lib/audit.ts` | Read/write layer built on the above |
+| `src/lib/kyc.ts` | KYC queue reads and `decideCase()` (approve / reject / escalate) |
+| `src/lib/session.ts` | Acting user, held in a cookie as a stand-in for SSO |
+| `src/app/kyc` | Queue list, case detail, decision server actions |
 
 ## How a state change flows
 
@@ -41,6 +44,20 @@ Because the change and its audit entry share a transaction, a record can never
 move without evidence, and an audit entry can never describe a change that did
 not happen. Permission is checked against the actor row read inside the same
 transaction, so a role revoked a moment earlier is honoured.
+
+## KYC review queue
+
+`/kyc` lists cases still awaiting a decision (PENDING or ESCALATED) with the
+applicant, submitted date and risk flag; `/kyc/[id]` shows the applicant file,
+the decision form and the case's audit trail. Every decision requires a reason.
+
+Roles: analysts view and escalate; reviewers (and admins) approve and reject.
+Buttons are filtered by role, and `mutate()` re-checks on the server.
+
+Applicant PII (email, date of birth, national ID, address) is redacted in
+`getCase()` for viewers without PII access, so an analyst never receives the
+raw values. There is no login yet — the header switches the acting user, which
+only selects an actor id; permission still comes from the database row.
 
 ## Adding a new action
 
