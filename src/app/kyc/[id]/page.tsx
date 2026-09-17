@@ -19,6 +19,12 @@ const DATETIME = new Intl.DateTimeFormat("en-GB", {
   timeZone: "UTC",
 });
 
+const DONE_MESSAGE: Record<string, string> = {
+  approve: "Case approved.",
+  reject: "Case rejected.",
+  escalate: "Case escalated.",
+};
+
 export default async function KycCasePage({
   params,
   searchParams,
@@ -63,7 +69,9 @@ export default async function KycCasePage({
       </h1>
 
       {error && <p className="alert error">{error}</p>}
-      {done && <p className="alert ok">Case {done}d.</p>}
+      {done && DONE_MESSAGE[done] && (
+        <p className="alert ok">{DONE_MESSAGE[done]}</p>
+      )}
 
       <h2>Applicant</h2>
       <dl>

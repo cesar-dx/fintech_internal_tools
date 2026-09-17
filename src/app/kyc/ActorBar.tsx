@@ -16,7 +16,12 @@ export function ActorBar({
       </span>
       <span className="actor-switch">
         <label htmlFor="actorId">Switch user</label>
-        <select id="actorId" name="actorId" defaultValue={actor.id}>
+        <select
+          id="actorId"
+          name="actorId"
+          key={actor.id}
+          defaultValue={actor.id}
+        >
           {actors.map((candidate) => (
             <option key={candidate.id} value={candidate.id}>
               {candidate.name} — {candidate.role}
