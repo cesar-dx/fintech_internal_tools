@@ -1,6 +1,12 @@
-# Conventions
+# Internal tools conventions
 
-These rules apply to every app in this repository.
+## Context
+
+These are internal operations tools for a fintech company. Their users are compliance, risk and support staff. Audit trails are regulatory evidence, not debug logs, and PII access is role-restricted.
+
+## Rules
+
+These rules apply to every app in the fintech_internal_tools repository.
 
 1. Every state change goes through the shared `mutate()` helper. No route or component writes to the database directly.
 
