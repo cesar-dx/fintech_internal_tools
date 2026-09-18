@@ -254,6 +254,8 @@ export async function requestRefund(params: {
         throw new RefundValidationError("Refund amount must be positive");
       }
 
+      await lockTransaction(tx, params.transactionId);
+
       const transaction = await tx.transaction.findUnique({
         where: { id: params.transactionId },
         include: { refunds: { select: { amountCents: true, status: true } } },
@@ -293,6 +295,15 @@ export async function requestRefund(params: {
 }
 
 type Tx = Parameters<Parameters<typeof mutate>[0]["apply"]>[0];
+
+/**
+ * Takes a row lock on the transaction for the rest of the database
+ * transaction, so concurrent refund requests read the refundable balance one
+ * at a time: the second waits for the first to commit and then sees its refund.
+ */
+async function lockTransaction(tx: Tx, transactionId: string) {
+  await tx.$queryRaw`SELECT id FROM "Transaction" WHERE id = ${transactionId} FOR UPDATE`;
+}
 
 /** Moves money on the transaction once a refund is issued. */
 async function settle(tx: Tx, transactionId: string, amountCents: number) {
