@@ -14,6 +14,7 @@ import {
   SelfApprovalError,
 } from "@/lib/refunds";
 import { getActor } from "@/lib/session";
+import { StripeConfigError, StripeRefundError } from "@/lib/stripe";
 
 const HANDLED = [
   PermissionError,
@@ -22,6 +23,8 @@ const HANDLED = [
   RefundValidationError,
   RefundStateError,
   SelfApprovalError,
+  StripeConfigError,
+  StripeRefundError,
 ];
 
 function isHandled(error: unknown): error is Error {

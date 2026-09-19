@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { mutate } from "@/lib/mutate";
 import { AuditAction } from "@/lib/permissions";
 import { redactEmail } from "@/lib/redact";
+import { createStripeRefund, isStripeConfigured } from "@/lib/stripe";
 
 export const TRANSACTION_ENTITY = "Transaction";
 export const REFUND_ENTITY = "Refund";
@@ -47,6 +48,8 @@ export type TransactionSummary = {
   currency: string;
   occurredAt: Date;
   status: TransactionStatus;
+  /** Set when the row mirrors a Stripe charge; refunds then go through Stripe. */
+  stripeChargeId: string | null;
 };
 
 export type RefundView = {
@@ -63,6 +66,7 @@ export type RefundView = {
   requestedAt: Date;
   reviewedBy: string | null;
   reviewedAt: Date | null;
+  stripeRefundId: string | null;
 };
 
 export type TransactionDetail = TransactionSummary & {
@@ -88,6 +92,7 @@ function toSummary(
     currency: string;
     occurredAt: Date;
     status: TransactionStatus;
+    stripeChargeId: string | null;
   },
   viewerRole: Role,
 ): TransactionSummary {
@@ -103,6 +108,7 @@ function toSummary(
     currency: transaction.currency,
     occurredAt: transaction.occurredAt,
     status: transaction.status,
+    stripeChargeId: transaction.stripeChargeId,
   };
 }
 
@@ -118,6 +124,7 @@ function toRefundView(refund: {
   requestedAt: Date;
   reviewedBy: { name: string } | null;
   reviewedAt: Date | null;
+  stripeRefundId: string | null;
 }): RefundView {
   return {
     id: refund.id,
@@ -133,7 +140,18 @@ function toRefundView(refund: {
     requestedAt: refund.requestedAt,
     reviewedBy: refund.reviewedBy?.name ?? null,
     reviewedAt: refund.reviewedAt,
+    stripeRefundId: refund.stripeRefundId,
   };
+}
+
+/**
+ * With a Stripe key configured the dashboard shows only transactions mirrored
+ * from Stripe; without one it falls back to the seeded processor feed.
+ */
+function sourceFilter() {
+  return isStripeConfigured()
+    ? { stripeChargeId: { not: null } }
+    : { stripeChargeId: null };
 }
 
 /**
@@ -150,6 +168,7 @@ export async function searchTransactions(
 
   const transactions = await prisma.transaction.findMany({
     where: {
+      ...sourceFilter(),
       OR: [
         { reference: { contains: term, mode: "insensitive" } },
         { customerName: { contains: term, mode: "insensitive" } },
@@ -280,12 +299,11 @@ export async function requestRefund(params: {
           reason: params.reason.trim(),
           status,
           requestedById: params.actorId,
-          issuedAt: requiresApproval ? null : new Date(),
         },
       });
 
       if (!requiresApproval) {
-        await settle(tx, transaction.id, params.amountCents);
+        return issue(tx, refund, transaction.stripeChargeId, params.actorId);
       }
 
       return refund;
@@ -303,6 +321,39 @@ type Tx = Parameters<Parameters<typeof mutate>[0]["apply"]>[0];
  */
 async function lockTransaction(tx: Tx, transactionId: string) {
   await tx.$queryRaw`SELECT id FROM "Transaction" WHERE id = ${transactionId} FOR UPDATE`;
+}
+
+/**
+ * Issues a refund that has cleared its checks. For a Stripe-backed
+ * transaction the money moves through the Stripe API first; the Stripe refund
+ * id is recorded on the row so the audit entry can be tied to Stripe's own
+ * record. Should the database transaction then fail to commit, the refund id
+ * used as the idempotency key means a retry cannot refund twice.
+ */
+async function issue(
+  tx: Tx,
+  refund: { id: string; transactionId: string; amountCents: number; reason: string },
+  stripeChargeId: string | null,
+  actorId: string,
+) {
+  let stripeRefundId: string | null = null;
+  if (stripeChargeId) {
+    const stripeRefund = await createStripeRefund({
+      chargeId: stripeChargeId,
+      amountCents: refund.amountCents,
+      refundId: refund.id,
+      actorId,
+      reason: refund.reason,
+    });
+    stripeRefundId = stripeRefund.id;
+  }
+
+  const issued = await tx.refund.update({
+    where: { id: refund.id },
+    data: { status: RefundStatus.ISSUED, issuedAt: new Date(), stripeRefundId },
+  });
+  await settle(tx, refund.transactionId, refund.amountCents);
+  return issued;
 }
 
 /** Moves money on the transaction once a refund is issued. */
@@ -358,6 +409,8 @@ export async function decideRefund(params: {
     reason: params.reason,
     metadata: { status },
     apply: async (tx) => {
+      await lockRefundTransaction(tx, params.refundId);
+
       const refund = await tx.refund.findUnique({
         where: { id: params.refundId },
         include: { transaction: true },
@@ -382,15 +435,24 @@ export async function decideRefund(params: {
           status,
           reviewedById: params.actorId,
           reviewedAt: new Date(),
-          issuedAt: status === "ISSUED" ? new Date() : null,
         },
       });
 
       if (status === "ISSUED") {
-        await settle(tx, refund.transactionId, refund.amountCents);
+        return issue(
+          tx,
+          decided,
+          refund.transaction.stripeChargeId,
+          params.actorId,
+        );
       }
 
       return decided;
     },
   });
+}
+
+/** Serialises decisions on the same refund so two reviewers cannot both issue it. */
+async function lockRefundTransaction(tx: Tx, refundId: string) {
+  await tx.$queryRaw`SELECT t.id FROM "Transaction" t JOIN "Refund" r ON r."transactionId" = t.id WHERE r.id = ${refundId} FOR UPDATE OF t`;
 }

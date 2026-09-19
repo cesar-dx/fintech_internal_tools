@@ -13,6 +13,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "stripe:seed": "tsx --env-file=.env scripts/seed-stripe.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {
@@ -22,7 +23,8 @@
     "@prisma/client": "^6.19.3",
     "next": "15.5.3",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

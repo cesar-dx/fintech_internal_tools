@@ -6,6 +6,7 @@ import {
   searchTransactions,
 } from "@/lib/refunds";
 import { getActor, listActors } from "@/lib/session";
+import { isStripeConfigured, syncStripeCharges } from "@/lib/stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,16 @@ export default async function RefundsSearchPage({
     );
   }
 
+  const stripe = isStripeConfigured();
+  let syncError: string | null = null;
+  if (stripe && query.trim().length > 0) {
+    try {
+      await syncStripeCharges();
+    } catch (error) {
+      syncError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   const [results, pending] = await Promise.all([
     searchTransactions(query, actor.role),
     listRefundsAwaitingApproval(),
@@ -48,6 +59,16 @@ export default async function RefundsSearchPage({
         </Link>
         .
       </p>
+      <p className="muted">
+        {stripe
+          ? "Transactions are fetched from Stripe (test mode) and refunds are issued through Stripe."
+          : "Stripe is not configured: showing seeded transactions and recording refunds locally."}
+      </p>
+      {syncError && (
+        <p className="alert error">
+          Could not refresh transactions from Stripe: {syncError}
+        </p>
+      )}
 
       <form className="search" method="get">
         <label htmlFor="q">Reference, customer name, email or card last 4</label>
