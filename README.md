@@ -1,3 +1,8 @@
+# Project Context
+
+This project is a proof of concept testing whether a shared security and audit layer holds across many apps and many engineers. It's a Next.js app on Postgres with two internal tools: a KYC review queue and a refunds dashboard. Both are built on one shared foundation. The idea I wanted to demonstrate is that every change to data goes through a single function that checks permission, applies the change and writes the audit entry in one transaction. Everything here was built with Devin in five sessions, most of them starting cold with no memory of the previous work, to see whether the conventions hold when a different engineer starts from nothing.
+
+
 # fintech_internal_tools
 
 Internal operations tools for compliance, risk and support staff. One Next.js
