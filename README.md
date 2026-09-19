@@ -6,15 +6,112 @@ Apps: the KYC review queue at `/kyc` and the refunds dashboard at `/refunds`
 
 See [conventions.md](./conventions.md) for the rules every app here follows.
 
-## Setup
+## Setup (development)
 
 ```bash
 npm install
-cp .env.example .env   # point DATABASE_URL at a local Postgres
-npm run db:migrate     # create the schema
+cp .env.example .env   # APP_ENV=development, DATABASE_URL -> local ops_tools_dev
+createdb ops_tools_dev # or any local Postgres; see Environments below
+npm run db:migrate     # create the schema (dev only; writes new migrations)
 npm run db:seed        # staff across the three roles, plus mock KYC cases and transactions
 npm run dev
 ```
+
+## Environments
+
+There are three tiers. Each has its own Postgres database, its own
+configuration, and its own Stripe test account; nothing is shared between them.
+
+| | development | staging | production |
+| --- | --- | --- | --- |
+| Purpose | local work, tests, CI | pre-release verification on prod-like infra | staff-facing |
+| `APP_ENV` | `development` (default when unset) | `staging` | `production` |
+| Database | `ops_tools_dev` on localhost | `ops_tools_staging`, managed Postgres | `ops_tools_prod`, managed Postgres |
+| Config source | `.env` copied from `.env.example` | `staging` GitHub Environment / host secrets | `production` GitHub Environment / host secrets |
+| Stripe | optional test key | test key, separate account | test key, separate account |
+| Schema changes | `npm run db:migrate` | `npm run db:deploy` (CI) | `npm run db:deploy` (CI) |
+| Seeding | `npm run db:seed` | allowed, use sparingly | refused |
+| UI | blue banner | amber banner | no banner |
+
+Templates for each tier live in `.env.example`, `.env.staging.example` and
+`.env.production.example`. Only `.env.example` is ever copied to a real file;
+staging and production values are set on the host or as GitHub Environment
+secrets and never committed (`.env*` is gitignored apart from the templates).
+
+### Configuration
+
+| Variable | Meaning |
+| --- | --- |
+| `APP_ENV` | Tier this process belongs to. Separate from `NODE_ENV`, which Next.js sets to `production` for every optimised build, staging included. |
+| `DATABASE_URL` | Postgres connection string. Its database name must end in `_dev`, `_staging` or `_prod` to match `APP_ENV`, or in none of them (a scratch database). |
+| `STRIPE_SECRET_KEY` | Optional; test-mode keys only in every tier. |
+
+`src/lib/env.ts` reads these and enforces the guard rails:
+
+- `APP_ENV` outside the three values fails at startup.
+- A `DATABASE_URL` naming another tier's database (e.g. `APP_ENV=staging`
+  pointing at `ops_tools_prod`) fails when the Prisma client is created, so a
+  mis-pasted secret cannot silently write staging test data into production.
+- `npm run db:seed` and `npm run stripe:seed` refuse to run with
+  `APP_ENV=production`.
+- `npm run db:migrate` (`prisma migrate dev`, which can create migrations and
+  reset a database) only runs in development. Staging and production apply
+  committed migrations with `npm run db:deploy` (`prisma migrate deploy`).
+
+### Provisioning staging and production
+
+1. Create a Postgres database and a dedicated role per tier
+   (`ops_tools_staging`, `ops_tools_prod`) on separate instances or at least
+   separate databases. Grant the role ownership of its database only.
+2. In the GitHub repository, create Environments named `staging` and
+   `production`. On `production`, add required reviewers and restrict
+   deployments to tags matching `v*`.
+3. In each Environment set the secrets `DATABASE_URL` and `STRIPE_SECRET_KEY`
+   (a test key from a Stripe account dedicated to that tier), and optionally
+   the variable `DEPLOY_COMMAND` with whatever hands the built app to your host
+   (e.g. `npx vercel deploy --prebuilt --prod`, `fly deploy`, or an SSH
+   command). Without it the workflow still applies migrations and builds.
+4. Set `APP_ENV`, `DATABASE_URL` and `STRIPE_SECRET_KEY` on the host that runs
+   `npm start` for that tier, using the matching `.env.*.example` as the list of
+   what is required.
+
+### Promoting a change
+
+Changes move in one direction: development -> staging -> production. Code and
+schema always travel together, because migrations are committed files applied
+by the same workflow that builds the app.
+
+1. **Develop.** Branch from `main`. If the schema changes, run
+   `npm run db:migrate -- --name <change>` locally so the migration is generated
+   under `prisma/migrations/` and commit it with the code. Migrations must be
+   additive or backwards compatible: the previous build keeps running while
+   they are applied, and `prisma migrate deploy` never rolls back.
+2. **Pull request.** `.github/workflows/ci.yml` runs lint, typecheck,
+   `db:deploy` against a fresh Postgres, the tests and the build. Review and
+   merge to `main`.
+3. **Staging (automatic).** Every push to `main` runs
+   `.github/workflows/deploy.yml` against the `staging` Environment: it prints
+   pending migrations (`npm run db:status`), applies them (`npm run db:deploy`),
+   builds, and runs `DEPLOY_COMMAND` if set. Verify on staging: exercise the
+   changed flow as each role, and check the audit entries it produced.
+4. **Production (tagged, approved).** Cut a release tag from the verified
+   `main` commit:
+   ```bash
+   git tag v1.4.0 <sha>
+   git push origin v1.4.0
+   ```
+   The same workflow runs against the `production` Environment and pauses for
+   the required reviewer before it touches the production database. Only
+   commits that have already been through staging should be tagged.
+5. **Hotfix or re-run.** *Actions -> Deploy -> Run workflow* deploys any ref to
+   a chosen environment, still subject to that environment's approval rules.
+
+To roll back application code, redeploy the previous tag. Schema migrations are
+not reverted automatically; write a new forward migration.
+
+The seeded staff, KYC cases and transactions exist for development and, when
+useful, staging. Production users are created through the app so that every
+role assignment has an audit entry.
 
 ### Stripe (optional)
 
@@ -45,6 +142,9 @@ falls back to the seeded transactions and refunds are recorded locally only.
 | --- | --- |
 | `prisma/schema.prisma` | `User` (ANALYST / REVIEWER / ADMIN) and the append-only `AuditLogEntry` |
 | `prisma/seed.ts` | Staff across the three roles, plus mock KYC cases and transactions |
+| `src/lib/env.ts` | `APP_ENV` and the database / seeding guard rails described under Environments |
+| `scripts/assert-env.ts` | Pre-flight for npm scripts that must not run against the wrong tier |
+| `.github/workflows/ci.yml`, `deploy.yml` | Checks on every PR; main -> staging, `v*` tag -> production |
 | `src/lib/mutate.ts` | The only supported way to change state |
 | `src/lib/permissions.ts` | Action → allowed roles registry; the source of audit action names |
 | `src/lib/redact.ts` | PII redaction applied where data is fetched |

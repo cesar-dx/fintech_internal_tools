@@ -1,4 +1,5 @@
 import { getStripe } from "../src/lib/stripe";
+import { assertNotProduction } from "../src/lib/env";
 
 /**
  * Creates a handful of succeeded test-mode payments so the refunds dashboard
@@ -14,6 +15,7 @@ const PAYMENTS = [
 ];
 
 async function main() {
+  assertNotProduction("Stripe seeding");
   const stripe = getStripe();
 
   for (const payment of PAYMENTS) {

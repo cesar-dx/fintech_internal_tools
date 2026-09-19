@@ -2,6 +2,7 @@ import { Prisma, RiskFlag, Role } from "@prisma/client";
 import { prisma } from "../src/lib/db";
 import { mutate } from "../src/lib/mutate";
 import { USER_ENTITY } from "../src/lib/users";
+import { assertDatabaseMatchesEnv, assertNotProduction } from "../src/lib/env";
 
 const BOOTSTRAP_ADMIN = {
   email: "dana.okafor@example.com",
@@ -158,6 +159,9 @@ async function createUser(
 }
 
 async function main() {
+  assertNotProduction("Seeding");
+  assertDatabaseMatchesEnv();
+
   // The first admin is the bootstrap of the audit chain: there is no actor yet
   // to attribute the change to, so it is created directly and audited as a
   // self-attributed entry once the row exists.
