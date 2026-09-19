@@ -68,6 +68,24 @@ a {
   align-items: center;
 }
 
+.env-banner {
+  padding: 0.35rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-align: center;
+}
+
+.env-development {
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.env-staging {
+  background: #fef3c7;
+  color: #92400e;
+}
+
 .badge {
   display: inline-block;
   padding: 0.1rem 0.5rem;

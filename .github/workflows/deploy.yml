@@ -1,0 +1,49 @@
+# Promotion path: main -> staging (automatic), release tag -> production
+# (gated by the `production` GitHub Environment's required reviewers).
+#
+# Each GitHub Environment (`staging`, `production`) supplies its own
+# DATABASE_URL and STRIPE_SECRET_KEY secrets, and optionally a DEPLOY_COMMAND
+# variable that hands the built app to the host (e.g. a Vercel, Fly or SSH
+# command). Migrations are applied with `prisma migrate deploy` only.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy the current ref to
+        type: choice
+        options: [staging, production]
+        required: true
+
+concurrency:
+  group: deploy-${{ inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}
+    env:
+      APP_ENV: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/v') && 'production' || 'staging') }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Show pending migrations
+        run: npm run db:status || true
+      - name: Apply migrations
+        run: npm run db:deploy
+      - run: npm run build
+      - name: Hand off to host
+        if: vars.DEPLOY_COMMAND != ''
+        run: ${{ vars.DEPLOY_COMMAND }}
