@@ -1,7 +1,8 @@
 # fintech_internal_tools
 
 Internal operations tools: Next.js (App Router) + TypeScript, Prisma and Postgres.
-Apps: the KYC review queue at `/kyc` and the refunds dashboard at `/refunds`.
+Apps: the KYC review queue at `/kyc` and the refunds dashboard at `/refunds`
+(backed by Stripe test mode when a key is configured, seeded data otherwise).
 
 See [conventions.md](./conventions.md) for the rules every app here follows.
 
@@ -15,6 +16,29 @@ npm run db:seed        # staff across the three roles, plus mock KYC cases and t
 npm run dev
 ```
 
+### Stripe (optional)
+
+The refunds dashboard can run against Stripe instead of the seeded feed. Only
+**test mode** is supported; the client refuses live keys.
+
+1. Create a Stripe account (or use an existing one) and switch the dashboard to
+   test mode. Copy the secret key (`sk_test_…`) from
+   <https://dashboard.stripe.com/test/apikeys>.
+2. Add it to `.env`:
+   ```bash
+   STRIPE_SECRET_KEY="sk_test_..."
+   ```
+3. Give the account some payments to refund. Either create them in the Stripe
+   dashboard with a test card (`4242 4242 4242 4242`), or run
+   `npm run stripe:seed`, which creates a few succeeded test payments with the
+   same customers as the seeded data.
+4. `npm run dev` and search on `/refunds` — searching pulls the latest charges
+   from Stripe before matching.
+
+With the key set, `/refunds` shows only Stripe-backed transactions and every
+issued refund is created through the Stripe API. Without the key, the app
+falls back to the seeded transactions and refunds are recorded locally only.
+
 ## Layout
 
 | Path | Purpose |
@@ -27,6 +51,8 @@ npm run dev
 | `src/lib/users.ts`, `src/lib/audit.ts` | Read/write layer built on the above |
 | `src/lib/kyc.ts` | KYC queue reads and `decideCase()` (approve / reject / escalate) |
 | `src/lib/refunds.ts` | Transaction search, `requestRefund()` and `decideRefund()` |
+| `src/lib/stripe.ts` | Stripe test-mode client, `syncStripeCharges()` and `createStripeRefund()` |
+| `scripts/seed-stripe.ts` | Creates succeeded test payments in Stripe (`npm run stripe:seed`) |
 | `src/lib/session.ts` | Acting user, held in a cookie as a stand-in for SSO |
 | `src/app/kyc` | Queue list, case detail, decision server actions |
 | `src/app/refunds` | Transaction search, transaction detail, approval queue |
@@ -78,6 +104,30 @@ Roles: support analysts search and request refunds; reviewers and admins also
 decide the ones over the threshold. Customer emails are redacted in
 `searchTransactions()` / `getTransaction()` for viewers without PII access.
 The threshold lives in `APPROVAL_THRESHOLD_CENTS` in `src/lib/refunds.ts`.
+
+### How Stripe fits in
+
+Stripe is the processor feed; the local `Transaction` and `Refund` tables
+remain the system of record for approvals and the audit trail, so the
+conventions above are unchanged.
+
+- **Fetching.** When `STRIPE_SECRET_KEY` is set, a search on `/refunds` first
+  calls `syncStripeCharges()`, which lists recent succeeded charges and upserts
+  them into `Transaction` keyed by `stripeChargeId` (reference = the
+  PaymentIntent id, amounts and `amount_refunded` mirrored from Stripe). Like
+  the seed, this is an inbound feed rather than an operator action, so it is
+  written directly; the search then runs against the local table and applies
+  the usual PII redaction. Rows with a `stripeChargeId` are shown when Stripe
+  is configured; seeded rows (no charge id) are shown when it is not.
+- **Refunding.** Inside the `mutate()` transaction, once a refund has passed
+  the balance and permission checks and is being issued (immediately for small
+  amounts, on reviewer approval for large ones), `createStripeRefund()` calls
+  `refunds.create` on the charge. The Stripe refund id is stored on the
+  `Refund` row and shown on the transaction page, tying the audit entry to
+  Stripe's own record. The local refund id is used as the Stripe idempotency
+  key, so a retry after a transient failure cannot refund a customer twice. If
+  Stripe rejects the refund the whole transaction rolls back and the error is
+  shown to the operator.
 
 ## Adding a new action
 

@@ -76,6 +76,12 @@ export default async function TransactionPage({
         <dd>•••• {transaction.cardLast4}</dd>
         <dt>Merchant</dt>
         <dd>{transaction.merchant}</dd>
+        <dt>Source</dt>
+        <dd>
+          {transaction.stripeChargeId
+            ? `Stripe charge ${transaction.stripeChargeId}`
+            : "Seeded data (Stripe not configured)"}
+        </dd>
         <dt>Description</dt>
         <dd>{transaction.description}</dd>
         <dt>Paid</dt>
@@ -123,6 +129,7 @@ export default async function TransactionPage({
             <th>Reason</th>
             <th>Status</th>
             <th>Reviewed by</th>
+            <th>Stripe refund</th>
           </tr>
         </thead>
         <tbody>
@@ -136,11 +143,12 @@ export default async function TransactionPage({
                 <span className="badge">{refund.status}</span>
               </td>
               <td>{refund.reviewedBy ?? "—"}</td>
+              <td>{refund.stripeRefundId ?? "—"}</td>
             </tr>
           ))}
           {transaction.refunds.length === 0 && (
             <tr>
-              <td colSpan={6}>No refunds on this transaction.</td>
+              <td colSpan={7}>No refunds on this transaction.</td>
             </tr>
           )}
         </tbody>
