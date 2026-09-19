@@ -51,7 +51,7 @@ describe("assertDatabaseMatchesEnv", () => {
   });
 
   it("requires DATABASE_URL", () => {
-    assert.throws(() => assertDatabaseMatchesEnv("development", undefined), EnvConfigError);
+    assert.throws(() => assertDatabaseMatchesEnv("development", ""), EnvConfigError);
   });
 });
 
