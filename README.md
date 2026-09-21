@@ -320,6 +320,26 @@ exceed the amount paid. The threshold is `APPROVAL_THRESHOLD_CENTS` in
 `src/lib/refunds.ts`. Customer emails are redacted in `searchTransactions()`
 / `getTransaction()` for viewers without PII access.
 
+## Known issues
+
+Documented here, not yet fixed:
+
+- **Transaction search leaks PII existence.** `searchTransactions()` matches
+  on customer email and card last four before redaction is applied, so a
+  viewer without PII access can still confirm that a given email or card
+  number exists by searching for it, even though the value itself is redacted
+  in the results.
+- **Stripe is called inside the database transaction.** `createStripeRefund()`
+  runs within the `mutate()` transaction. A slow or failing Stripe call holds
+  the transaction (and the locked transaction row) open, and a commit failure
+  after Stripe succeeds leaves a refund issued with no local record.
+  Production should call Stripe outside the transaction and record the result
+  in a follow-up write.
+- **Audit log is append-only by convention, not by the database.** Nothing at
+  the database level stops `UPDATE` or `DELETE` on `AuditLogEntry`; only the
+  application code refrains from them. Production should revoke `UPDATE` and
+  `DELETE` on the audit table from the application role.
+
 ## Layout
 
 | Path | Purpose |
